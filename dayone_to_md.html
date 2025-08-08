@@ -1,100 +1,213 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Day One JSON 工具</title>
-  <style>
-    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", sans-serif; background:#f8f9fa; }
-    header { background:#2c3e50; color:#fff; padding: 12px 16px; display:flex; align-items:center; justify-content:space-between; }
-    header .left { display:flex; align-items:center; gap:12px; }
-    header .right { display:flex; align-items:center; gap:12px; }
-    header button { border:none; background:#34495e; color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer; }
-    header button:hover { background:#3e5a72; }
-    #main { display: grid; grid-template-columns: 360px 1fr; height: calc(100vh - 48px); }
-    #sidebar { border-right:1px solid #ccc; background:#fff; overflow:auto; padding: 8px; }
-    .item { display:flex; align-items:flex-start; gap:8px; padding:8px; border-bottom:1px dashed #ddd; cursor:pointer; }
-    .item:hover { background:#f0f0f0; }
-    .item .meta { flex:1; }
-    .title { font-weight:bold; }
-    .dim { font-size:12px; color:#666; }
-    #preview { padding:16px; overflow:auto; background:#fff; }
-    #preview .filename { font-size:14px; color:#444; margin-bottom:8px; }
-    #preview .mode-btn { float:right; margin-left:8px; }
-    pre { background:#f4f4f4; padding:12px; border-radius:6px; white-space:pre-wrap; word-wrap:break-word; }
-    .toolbar { padding:8px; display:flex; gap:8px; border-bottom:1px solid #ddd; background:#fafafa; }
-    .btn { padding:6px 10px; border:1px solid #ccc; background:#fff; border-radius:6px; cursor:pointer; }
-    .btn:hover { background:#eee; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Day One JSON 工具</title>
+<style>
+  :root{
+    --bg:#f5f7fa;
+    --card:#ffffff;
+    --text:#1f2d3d;
+    --muted:#6b7280;
+    --line:#e5e7eb;
+    --primary:#111827;
+  }
+  html,body{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;background:var(--bg);color:var(--text)}
+  /* 頁面白色表頭，對齊 pic_zip 風格 */
+  .page-header{
+    background:#fff;border-bottom:1px solid var(--line);
+    height:56px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 16px; position:sticky; top:0; z-index:5;
+  }
+  .page-title{font-weight:700;}
+  .btn{border:1px solid #d1d5db;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+  .btn:hover{background:#f3f4f6}
+  .btn.primary{background:#111;color:#fff;border-color:#111}
+  /* 版面 */
+  .wrap{display:grid;grid-template-columns:360px 1fr;height:calc(100vh - 56px)}
+  .side{background:var(--card);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .tool{padding:10px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  .list{overflow:auto}
+  .item{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-bottom:1px dashed var(--line);cursor:pointer}
+  .item:hover{background:#fafafa}
+  .item .meta{flex:1}
+  .title{font-weight:600}
+  .dim{font-size:12px;color:var(--muted)}
+  /* 預覽 */
+  .preview{display:flex;flex-direction:column}
+  .p-head{background:#fff;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;align-items:center;gap:12px}
+  .p-name{font-weight:600;color:#374151}
+  .spacer{flex:1}
+  .seg{display:inline-flex;border:1px solid #d1d5db;border-radius:8px;overflow:hidden}
+  .seg .segbtn{padding:6px 10px;border:none;background:#fff;cursor:pointer}
+  .seg .segbtn.active{background:#111827;color:#fff}
+  .p-body{padding:20px;overflow:auto;background:#fff}
+  pre{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:12px;white-space:pre-wrap;word-wrap:break-word}
+</style>
 </head>
 <body>
 
-<header>
-  <div class="left">
-    <button onclick="location.href='index.html'">← 返回首頁</button>
-    <strong>Day One JSON 工具</strong>
-  </div>
-  <div class="right">
-    <button onclick="toggleMode()" class="btn">切換模式</button>
-  </div>
-</header>
-
-<div id="main">
-  <div id="sidebar">
-    <div class="toolbar">
-      <input type="file" id="fileInput" accept=".json">
-    </div>
-    <div id="list"></div>
-  </div>
-  <div id="preview">
-    <div class="filename">尚未選取條目</div>
-    <div id="content"><div style="color:#888;">請從左側選擇一條目預覽</div></div>
+<!-- 頁面白色表頭 -->
+<div class="page-header">
+  <div class="page-title">Day One JSON 工具</div>
+  <div>
+    <button class="btn" onclick="goHome()">回首頁</button>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script>
-let entries = [], rawMd = [], currentIndex = -1, showRaw = false;
+<div class="wrap">
+  <!-- 左側 -->
+  <aside class="side">
+    <div class="tool">
+      <label class="btn">
+        <input id="file" type="file" accept=".json,application/json" style="display:none">
+        選擇檔案
+      </label>
+      <span id="fname" class="dim">未選取檔案</span>
+    </div>
+    <div id="list" class="list"></div>
+  </aside>
 
-document.getElementById('fileInput').addEventListener('change', async (e)=>{
-  const file = e.target.files[0];
-  const json = JSON.parse(await file.text());
-  entries = json.entries || [];
-  renderList();
-});
-
-function renderList(){
-  const $list = document.getElementById('list');
-  $list.innerHTML = '';
-  entries.forEach((e, i) => {
-    const div = document.createElement('div');
-    div.className = 'item';
-    div.innerHTML = `
-      <input type="checkbox" data-i="${i}">
-      <div class="meta">
-        <div class="title">${(e.text || '').split('\n')[0] || '無標題'}</div>
-        <div class="dim">${e.creationDate || ''}</div>
+  <!-- 右側 -->
+  <section class="preview">
+    <div class="p-head">
+      <div class="p-name" id="pname">尚未選取條目</div>
+      <div class="spacer"></div>
+      <div class="seg">
+        <button id="segHtml" class="segbtn active" onclick="setMode('html')">預覽 HTML</button>
+        <button id="segMd" class="segbtn" onclick="setMode('md')">原始 MD</button>
       </div>
-    `;
-    div.onclick = () => preview(i);
-    $list.appendChild(div);
+      <button id="dlOneHtml" class="btn">下載這條 HTML</button>
+      <button id="dlOneMd" class="btn">下載這條 MD</button>
+    </div>
+    <div id="view" class="p-body">
+      <div class="dim">從左側點一條就會顯示內容。</div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<script>
+  // 狀態
+  let entries = [];
+  let mode = 'html'; // 'html' | 'md'
+  let current = -1;
+
+  // 返回首頁（比照 pic_zip 的做法：回上一層 index.html）
+  function goHome(){
+    // 如果和 pic_zip 一樣放在同層，就這樣
+    location.href = 'index.html';
+  }
+
+  // 切換模式
+  function setMode(m){
+    mode = m;
+    document.getElementById('segHtml').classList.toggle('active', m==='html');
+    document.getElementById('segMd').classList.toggle('active', m==='md');
+    if(current>=0) renderPreview(entries[current]);
+  }
+
+  // 載入 JSON
+  document.getElementById('file').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    document.getElementById('fname').textContent = file.name;
+    const json = JSON.parse(await file.text());
+    entries = Array.isArray(json.entries)? json.entries : [];
+    renderList();
   });
-}
 
-function preview(i){
-  currentIndex = i;
-  const e = entries[i];
-  const md = e.text || '(空白)';
-  const html = marked.parse(md);
-  rawMd[i] = md;
-  document.querySelector('.filename').textContent = e.creationDate || '無日期';
-  document.getElementById('content').innerHTML = showRaw ? `<pre>${md}</pre>` : html;
-}
+  function slug(s){
+    return (s||'').normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^\w\u4e00-\u9fff-]+/g,'-')
+      .replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,80) || 'entry';
+  }
+  function fmtDate(iso){
+    const d = new Date(iso||Date.now());
+    const p = n=> String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  }
+  function entryToName(e, md){
+    const firstHeader = (md.match(/^#\s*(.+)$/m)||[])[1];
+    return `${fmtDate(e.creationDate || e.modifiedDate || Date.now())}-${slug(firstHeader || e.uuid || 'note')}.md`;
+  }
 
-function toggleMode(){
-  showRaw = !showRaw;
-  if(currentIndex >= 0) preview(currentIndex);
-}
+  // 左側清單
+  function renderList(){
+    const $list = document.getElementById('list');
+    $list.innerHTML = '';
+    if(entries.length===0){
+      $list.innerHTML = '<div style="padding:16px" class="dim">這份 JSON 裡沒有 entries。</div>';
+      return;
+    }
+    entries.forEach((e,i)=>{
+      const md = (e.text && e.text.trim()) || '(空白)';
+      const title = (md.match(/^#\s*(.+)$/m)||[])[1] || md.split('\n')[0] || '無標題';
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.innerHTML = `
+        <input type="checkbox" data-idx="${i}">
+        <div class="meta">
+          <div class="title">${title}</div>
+          <div class="dim">${e.creationDate || ''}</div>
+        </div>
+      `;
+      row.addEventListener('click', (ev)=>{
+        if(ev.target.tagName.toLowerCase()==='input') return;
+        current = i;
+        renderPreview(e);
+      });
+      $list.appendChild(row);
+    });
+  }
+
+  function renderPreview(e){
+    const md = (e.text && e.text.trim()) || '(空白)';
+    const html = marked.parse(md, { mangle:false, headerIds:false });
+    const name = entryToName(e, md);
+    document.getElementById('pname').textContent = name;
+    const $view = document.getElementById('view');
+    if(mode==='md'){
+      $view.innerHTML = `<pre>${escapeHtml(md)}</pre>`;
+    }else{
+      // 轉換 Day One 內嵌圖片協定為純文字提示
+      const html2 = html.replaceAll('dayone-moment://','(圖片ID) ');
+      $view.innerHTML = html2;
+    }
+
+    // 綁單檔下載
+    document.getElementById('dlOneMd').onclick = ()=>{
+      const blob = new Blob([md], {type:'text/markdown;charset=utf-8'});
+      saveAs(blob, name);
+    };
+    document.getElementById('dlOneHtml').onclick = ()=>{
+      const fileName = name.replace(/\.md$/i,'.html');
+      const htmlWrapped = wrapHtml(name.replace(/\.md$/i,''), marked.parse(md, { mangle:false, headerIds:false }));
+      const blob = new Blob([htmlWrapped], {type:'text/html;charset=utf-8'});
+      saveAs(blob, fileName);
+    };
+  }
+
+  function wrapHtml(title, htmlBody){
+    return `<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;max-width:900px;margin:24px auto;line-height:1.6}
+img{max-width:100%}pre,code{background:#f3f4f6;padding:2px 4px;border-radius:4px}
+blockquote{border-left:3px solid #e5e7eb;padding-left:10px;color:#555}
+</style></head><body>${htmlBody}</body></html>`;
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, (c)=>({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[c]);
+  }
 </script>
 
 </body>
