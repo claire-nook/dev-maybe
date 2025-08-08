@@ -194,14 +194,13 @@ function triggerDownload() {
 ${marked.parse(md)}
 </body>
 </html>`;
-  const win = window.open("", "_blank");
-  if (win) {
-    win.document.open();
-    win.document.write(htmlContent);
-    win.document.close();
-  } else {
-    alert("無法開啟新分頁，請確認瀏覽器未封鎖彈窗");
-  }
+  const blob = new Blob([htmlContent], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "markdown.html";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 document.getElementById("downloadBtnPC")?.addEventListener("click", triggerDownload);
