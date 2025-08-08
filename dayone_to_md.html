@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Day One JSON → Markdown/HTML</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial; margin: 0; background: #f6f7f9; }
+    header { padding: 12px 16px; background: #111; color: #fff; display:flex; gap:12px; align-items:center; }
+    main { display: grid; grid-template-columns: 360px 1fr; gap: 0; height: calc(100vh - 52px); }
+    #sidebar { border-right: 1px solid #ddd; background:#fff; overflow:auto; }
+    #preview { overflow: auto; padding: 20px; }
+    .toolbar { padding: 10px; border-bottom: 1px solid #eee; display:flex; gap:8px; flex-wrap: wrap; }
+    .list { padding: 8px; }
+    .item { display:flex; gap:8px; align-items: flex-start; padding: 8px; border-bottom: 1px dashed #eee; cursor:pointer; }
+    .item:hover { background:#f8fafc; }
+    .item .meta { flex: 1; }
+    .title { font-weight: 600; }
+    .dim { color:#666; font-size:12px; }
+    .btn { padding:8px 10px; border:1px solid #ccc; background:#fff; border-radius:6px; cursor:pointer; }
+    .btn.primary { background:#111; color:#fff; border-color:#111; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .right { margin-left:auto; }
+    pre, code { background:#f2f4f8; padding:2px 4px; border-radius:4px; }
+    .empty { padding:24px; color:#777; }
+  </style>
+</head>
+<body>
+  <header>
+    <input id="file" type="file" accept=".json,application/json" />
+    <button id="demo" class="btn">載入範例（給你測）</button>
+    <span class="dim">上傳 Day One 匯出的 JSON（或妳剛傳給我的那種）</span>
+  </header>
+
+  <main>
+    <section id="sidebar">
+      <div class="toolbar">
+        <button id="zip-md" class="btn">下載勾選的 MD.zip</button>
+        <button id="zip-html" class="btn">下載勾選的 HTML.zip</button>
+        <button id="select-all" class="btn">全選</button>
+        <button id="clear-all" class="btn">全不選</button>
+        <span id="count" class="dim right">0 條目</span>
+      </div>
+      <div id="list" class="list">
+        <div class="empty">先上傳 JSON，我再幫妳生清單。</div>
+      </div>
+    </section>
+
+    <section id="preview">
+      <div class="empty">點左邊任一條目預覽。下方有「下載 HTML」單檔鈕。</div>
+      <div id="preview-actions" style="display:none; margin-bottom:12px;">
+        <button id="download-one-html" class="btn primary">下載這一條的 HTML</button>
+        <button id="download-one-md" class="btn">下載這一條的 MD</button>
+      </div>
+      <article id="render"></article>
+    </section>
+  </main>
+
+  <!-- libs -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+  <script>
+    // --- 小工具 ---
+    const slug = s => (s||'').normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^\w\u4e00-\u9fff-]+/g,'-')
+      .replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,80) || 'entry';
+
+    const fmtDate = iso => {
+      const d = new Date(iso||Date.now());
+      const pad = n => String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    };
+
+    // Day One → markdown 內容與檔名
+    function entryToMarkdown(e){
+      // 1) 直接用 text 欄位（Day One 已經幫妳轉成 Markdown）
+      // 2) 沒有 text 就試著從 richText 抽（偷懶先不 parse RT，避免災難）
+      const md = (e.text && e.text.trim())
+        || (e.richText ? '> 這條只有 Day One richText，先略過 richText 轉換。\n' : '')
+        || '(空白)';
+      // 產檔名：日期 + 標題 or uuid
+      const firstHeader = (md.match(/^#\s*(.+)$/m)||[])[1];
+      const name = `${fmtDate(e.creationDate || e.modifiedDate || Date.now())}-${slug(firstHeader || e.uuid)}.md`;
+      return {name, md};
+    }
+
+    // 單檔 HTML 包裝（含簡單 CSS）
+    function wrapHtml(title, htmlBody){
+      return `<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
+<style>
+body{font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",Arial; margin:24px; line-height:1.6; max-width:900px}
+pre,code{background:#f2f4f8;padding:2px 4px;border-radius:4px}
+img{max-width:100%}
+h1,h2,h3{margin-top:1.2em}
+blockquote{border-left:3px solid #ddd;padding-left:10px;color:#555}
+</style></head><body>${htmlBody}</body></html>`;
+    }
+
+    // 狀態
+    let state = { entries: [], selected: new Set(), currentIdx: -1 };
+
+    // UI refs
+    const $list = document.getElementById('list');
+    const $count = document.getElementById('count');
+    const $render = document.getElementById('render');
+    const $prevActions = document.getElementById('preview-actions');
+    const $dlOneHtml = document.getElementById('download-one-html');
+    const $dlOneMd = document.getElementById('download-one-md');
+
+    // 輸入
+    document.getElementById('file').addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if (!file) return;
+      loadJson(JSON.parse(await file.text()));
+    });
+
+    // 內建測試（我幫妳塞一條假資料；正式用就不上）
+    document.getElementById('demo').addEventListener('click', ()=>{
+      const demo = {
+        metadata:{version:"1.0"},
+        entries:[{
+          creationDate:"2023-08-01T22:46:50Z",
+          uuid:"DEMO-123",
+          text:"# 行前準備\n\n### 台灣機場接送\n送機：7120\n\n### 漫遊\n- [X] 中華 2GB\n\n"
+        }]
+      };
+      loadJson(demo);
+    });
+
+    function loadJson(json){
+      const raw = Array.isArray(json.entries) ? json.entries : [];
+      const entries = raw.map((e,idx)=>{
+        const {name, md} = entryToMarkdown(e);
+        // 轉 HTML 給預覽
+        const html = marked.parse(md, { mangle:false, headerIds:false });
+        const title = (md.match(/^#\s*(.+)$/m)||[])[1] || name.replace(/\.md$/,'');
+        return { idx, name, title, md, html };
+      });
+      state = { entries, selected: new Set(), currentIdx: -1 };
+      renderList();
+      $render.innerHTML = '<div class="empty">點左邊任一條目預覽。</div>';
+      $prevActions.style.display = 'none';
+    }
+
+    function renderList(){
+      $list.innerHTML = '';
+      if (state.entries.length === 0) {
+        $list.innerHTML = '<div class="empty">這份 JSON 裡面沒有 entries 啊。</div>'; 
+      }
+      state.entries.forEach(item=>{
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `
+          <input type="checkbox" data-idx="${item.idx}" ${state.selected.has(item.idx)?'checked':''} />
+          <div class="meta">
+            <div class="title">${item.title}</div>
+            <div class="dim">${item.name}</div>
+          </div>
+        `;
+        // 勾選
+        row.querySelector('input').addEventListener('change', (ev)=>{
+          if (ev.target.checked) state.selected.add(item.idx);
+          else state.selected.delete(item.idx);
+        });
+        // 點整列預覽
+        row.addEventListener('click', (ev)=>{
+          // 讓點 checkbox 不觸發預覽
+          if (ev.target.tagName.toLowerCase() === 'input') return;
+          showPreview(item.idx);
+        });
+        $list.appendChild(row);
+      });
+      $count.textContent = `${state.entries.length} 條目`;
+    }
+
+    function showPreview(idx){
+      const it = state.entries[idx];
+      state.currentIdx = idx;
+      $render.innerHTML = it.html.replaceAll('dayone-moment://', '(沒有原始圖片，僅顯示ID) ');
+      $prevActions.style.display = 'block';
+    }
+
+    // 批次：zip MD
+    document.getElementById('zip-md').addEventListener('click', async ()=>{
+      const chosen = [...state.selected];
+      if (chosen.length === 0) return alert('先勾幾條啦。');
+      const zip = new JSZip();
+      chosen.forEach(i => {
+        const it = state.entries[i];
+        zip.file(it.name, it.md);
+      });
+      const blob = await zip.generateAsync({type:'blob'});
+      saveAs(blob, 'notes-md.zip');
+    });
+
+    // 批次：zip HTML
+    document.getElementById('zip-html').addEventListener('click', async ()=>{
+      const chosen = [...state.selected];
+      if (chosen.length === 0) return alert('先勾幾條啦。');
+      const zip = new JSZip();
+      chosen.forEach(i => {
+        const it = state.entries[i];
+        const html = wrapHtml(it.title, it.html);
+        zip.file(it.name.replace(/\.md$/i,'.html'), html);
+      });
+      const blob = await zip.generateAsync({type:'blob'});
+      saveAs(blob, 'notes-html.zip');
+    });
+
+    // 單檔下載：HTML
+    $dlOneHtml.addEventListener('click', ()=>{
+      const i = state.currentIdx;
+      if (i < 0) return;
+      const it = state.entries[i];
+      const blob = new Blob([wrapHtml(it.title, it.html)], {type:'text/html;charset=utf-8'});
+      saveAs(blob, it.name.replace(/\.md$/i, '.html'));
+    });
+    // 單檔下載：MD
+    $dlOneMd.addEventListener('click', ()=>{
+      const i = state.currentIdx;
+      if (i < 0) return;
+      const it = state.entries[i];
+      const blob = new Blob([it.md], {type:'text/markdown;charset=utf-8'});
+      saveAs(blob, it.name);
+    });
+
+    // 全選/全不選
+    document.getElementById('select-all').addEventListener('click', ()=>{
+      state.selected = new Set(state.entries.map(e=>e.idx));
+      renderList();
+    });
+    document.getElementById('clear-all').addEventListener('click', ()=>{
+      state.selected = new Set();
+      renderList();
+    });
+  </script>
+</body>
+</html>
