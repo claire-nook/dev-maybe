@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>
+   圖片壓縮＋總計測試（含一鍵下載ZIP）
+  </title>
+  <style>
+   :root{
+      --card-bg:#fff;
+      --soft:#f5f5f7;
+      --ink:#222;
+      --muted:#666;
+      --accent:#888;
+      --radius:12px;
+    }
+    body{
+      font-family: system-ui, -apple-system, "Segoe UI", Arial, "Noto Sans TC", sans-serif;
+      margin:0;
+      background:#fafafa;
+      color:var(--ink);
+    }
+    .wrap{
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 24px 24px 40px;
+    }
+    h2{
+      margin:0 0 16px;
+      font-size: clamp(1.25rem, 1.2rem + 1vw, 1.8rem);
+      letter-spacing:.5px;
+    }
+
+    /* 控制列 */
+    .toolbar{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      background:var(--card-bg);
+      padding:14px;
+      border-radius:var(--radius);
+      box-shadow: 0 2px 10px rgba(0,0,0,.06);
+      margin-bottom:12px;
+    }
+    .toolbar .hint{
+      font-size:.95rem;
+      color:var(--muted);
+    }
+    input[type="file"]{
+      font-size:1rem;
+      padding:8px;
+      border:1px solid #ddd;
+      border-radius:8px;
+      background:#fff;
+    }
+    .btn{
+      border: none;
+      background:#2f855a;
+      color:#fff;
+      padding:10px 14px;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:1rem;
+    }
+    .btn[disabled]{
+      background:#bdbdbd;
+      cursor:not-allowed;
+    }
+
+    #summary{
+      background:var(--soft);
+      border-left:5px solid var(--accent);
+      padding:12px 14px;
+      border-radius:10px;
+      font-size:1rem;
+      line-height:1.6;
+      box-shadow: inset 0 0 0 1px #eee;
+      margin-bottom:16px;
+    }
+
+    /* 預覽區：自適應網格 */
+    #previewContainer{
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap:12px;
+    }
+    .preview-item{
+      background:var(--card-bg);
+      border-radius:10px;
+      padding:10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.06);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:flex-start;
+      gap:8px;
+      position:relative;
+    }
+    .thumb{
+      width:100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius:8px;
+      border:1px solid #ddd;
+      cursor: zoom-in;
+    }
+    .info{
+      width:100%;
+      font-size:.95rem;
+      color:#444;
+      background:#fff;
+      border:1px dashed #e3e3e3;
+      border-radius:8px;
+      padding:6px 8px;
+      line-height:1.45;
+      word-break: break-all;
+    }
+    .remove{
+      position:absolute;
+      top:6px; right:6px;
+      width:26px; height:26px;
+      border-radius:50%;
+      background:#e53935;
+      color:#fff;
+      border:none;
+      cursor:pointer;
+      font-weight:bold;
+      line-height:26px;
+    }
+
+    /* Modal 放大 */
+    #modal{
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.7);
+      justify-content:center;
+      align-items:center;
+      z-index:9999;
+      padding:16px;
+    }
+    #modal img{
+      max-width: 92vw;
+      max-height: 90vh;
+      border:4px solid #fff;
+      border-radius:12px;
+    }
+    #modal .close{
+      position:absolute;
+      top:16px;
+      right:20px;
+      font-size:34px;
+      color:#fff;
+      cursor:pointer;
+      line-height:1;
+      user-select:none;
+    }
+
+    @media (max-width: 767px){
+      .wrap{ padding: 18px 14px 28px; }
+      .toolbar{ padding:12px; }
+      input, select, textarea, button{
+        font-size:16px !important;
+        height:44px;
+      }
+      #summary{ font-size:1.05rem; }
+      #previewContainer{ grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:12px; }
+      .thumb{ border-width:1px; }
+      .info{ font-size:1rem; }
+      #modal .close{ font-size:38px; }
+    }
+    @media (min-width: 1400px){
+      #previewContainer{ grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    }
+  </style>
+  <!-- JSZip (用於打包ZIP；需連網載入) -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js">
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600&amp;display=swap" rel="stylesheet"/>
+ </head>
+ <body style="font-family: 'Nunito', sans-serif;">
+  <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 10;">
+   <h2>
+    🗜️ 圖片壓縮工具
+   </h2>
+   <a href="index.html" style="text-decoration: none; font-size: 1rem; padding: 0.5rem 1rem; border-radius: 6px; background: #eee; color: #333; box-shadow: 0 1px 4px rgba(0,0,0,0.1);">
+    🧭 回首頁
+   </a>
+  </header>
+  <div class="wrap">
+   <h2>
+    圖片壓縮＋預覽測試（多一顆「一鍵ZIP」）
+   </h2>
+   <div class="toolbar">
+    <input accept="image/*" id="fileInput" multiple="" type="file"/>
+    <button class="btn" disabled="" id="btnZip">
+     一鍵下載 ZIP
+    </button>
+    <span class="hint">
+     選幾張大圖丟進來壓縮。壓完可直接把縮圖打包成 zip 下載。
+    </span>
+   </div>
+   <div id="summary">
+    尚未選取檔案
+   </div>
+   <div id="previewContainer">
+   </div>
+  </div>
+  <!-- Modal -->
+  <div id="modal">
+   <span aria-label="關閉" class="close">
+    &times;
+   </span>
+   <img alt="預覽放大圖" id="modalImg"/>
+  </div>
+  <script>
+   const input = document.getElementById('fileInput');
+    const container = document.getElementById('previewContainer');
+    const modal = document.getElementById('modal');
+    const modalImg = document.getElementById('modalImg');
+    const summaryBox = document.getElementById('summary');
+    const btnZip = document.getElementById('btnZip');
+
+    // 暫存壓縮後的圖（給ZIP用）
+    let compressedList = []; // {name, dataUrl, sizeKB}
+
+    input.addEventListener('change', async (e) => {
+      container.innerHTML = '';
+      compressedList = [];
+      btnZip.disabled = true;
+      summaryBox.textContent = '正在壓縮中…別急，呼吸。';
+
+      const files = [...e.target.files];
+      if (!files.length){
+        summaryBox.textContent = '尚未選取檔案';
+        return;
+      }
+
+      let totalOriginal = 0;
+      let totalCompressed = 0;
+      let totalTime = 0;
+
+      // 避免重名：用計數器去重
+      const nameCount = {};
+
+      for (const file of files) {
+        const originalSizeKB = file.size / 1024;
+        totalOriginal += originalSizeKB;
+
+        const start = performance.now();
+        const compressedDataUrl = await compressImage(file, 0.7);
+        const end = performance.now();
+        const duration = end - start;
+        totalTime += duration;
+
+        const compressedSizeKB = Math.round((compressedDataUrl.length * 3 / 4) / 1024);
+        totalCompressed += compressedSizeKB;
+
+        // 產檔名（.jpg），同名自動加 (_2), (_3)...
+        const baseName = (file.name.replace(/\.[^.]+$/, '') || 'image');
+        let name = baseName + '.jpg';
+        if (nameCount[name]) {
+          nameCount[name] += 1;
+          const idx = nameCount[name];
+          name = baseName + '_' + idx + '.jpg';
+        } else {
+          nameCount[name] = 1;
+        }
+
+        // 卡片
+        const card = document.createElement('div');
+        card.className = 'preview-item';
+
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.src = compressedDataUrl;
+        img.alt = '縮圖';
+        img.addEventListener('click', () => openModal(compressedDataUrl));
+
+        const info = document.createElement('div');
+        info.className = 'info';
+        info.innerText =
+`檔名：${name}
+原：${originalSizeKB.toFixed(1)} KB
+壓：${compressedSizeKB} KB
+耗時：${duration.toFixed(1)} ms`;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove';
+        removeBtn.type = 'button';
+        removeBtn.innerText = '×';
+        removeBtn.title = '移除這張縮圖';
+        removeBtn.addEventListener('click', () => {
+          // 從UI移除
+          card.remove();
+          // 從列表剔除
+          compressedList = compressedList.filter(x => x.name !== name || x.dataUrl !== compressedDataUrl);
+          // 若全刪光，關閉ZIP按鈕
+          if (compressedList.length === 0) btnZip.disabled = true;
+        });
+
+        card.appendChild(removeBtn);
+        card.appendChild(img);
+        card.appendChild(info);
+        container.appendChild(card);
+
+        // 收進待打包清單
+        compressedList.push({ name, dataUrl: compressedDataUrl, sizeKB: compressedSizeKB });
+      }
+
+      const count = compressedList.length;
+      const ratio = totalCompressed / totalOriginal;
+      summaryBox.innerHTML = `
+        📸 圖片總數：<strong>${count}</strong> 張<br>
+        📦 原始總大小：<strong>${(totalOriginal / 1024).toFixed(2)} MB</strong><br>
+        🗜️ 壓縮後總大小：<strong>${(totalCompressed / 1024).toFixed(2)} MB</strong><br>
+        📉 壓縮比率：<strong>${(ratio * 100).toFixed(1)}%</strong><br>
+        ⏱️ 總壓縮耗時：<strong>${(totalTime / 1000).toFixed(1)} 秒</strong>
+      `;
+
+      // 有東西才可ZIP
+      btnZip.disabled = count === 0;
+    });
+
+    btnZip.addEventListener('click', async () => {
+      if (!window.JSZip) {
+        alert('JSZip 載入失敗，請確認網路或重整頁面。');
+        return;
+      }
+      if (!compressedList.length){
+        alert('沒有可打包的縮圖。');
+        return;
+      }
+      btnZip.disabled = true;
+      btnZip.textContent = '打包中…';
+
+      try{
+        const zip = new JSZip();
+        const folder = zip.folder('compressed_images');
+        // 直接用 base64 內容塞進 ZIP
+        for (const item of compressedList){
+          const base64 = item.dataUrl.split(',')[1];
+          folder.file(item.name, base64, {base64:true});
+        }
+        const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
+        const zipName = makeZipName();
+        triggerDownloadBlob(blob, zipName);
+      }catch(err){
+        console.error(err);
+        alert('建立 ZIP 發生錯誤：' + err.message);
+      }finally{
+        btnZip.textContent = '一鍵下載 ZIP';
+        btnZip.disabled = compressedList.length === 0;
+      }
+    });
+
+    function makeZipName(){
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      const y = d.getFullYear();
+      const m = pad(d.getMonth()+1);
+      const day = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const mm = pad(d.getMinutes());
+      const ss = pad(d.getSeconds());
+      return `compressed_${y}${m}${day}_${hh}${mm}${ss}.zip`;
+    }
+
+    function triggerDownloadBlob(blob, fileName){
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function compressImage(file, quality = 0.7) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = () => { img.src = reader.result; };
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxSize = 1280;
+          let { width, height } = img;
+
+          if (width > height) {
+            if (width > maxSize) { height *= maxSize / width; width = maxSize; }
+          } else {
+            if (height > maxSize) { width *= maxSize / height; height = maxSize; }
+          }
+
+          canvas.width = Math.floor(width);
+          canvas.height = Math.floor(height);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function openModal(src){
+      modalImg.src = src;
+      modal.style.display = 'flex';
+    }
+    document.querySelector('#modal .close').onclick = () => modal.style.display = 'none';
+    window.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
+    });
+  </script>
+ </body>
+</html>

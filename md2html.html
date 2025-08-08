@@ -1,0 +1,168 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Markdown to HTML 預覽工具</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600&display=swap">
+  <style>
+    :root {
+      --bg: #f8f9fa;
+      --card: #fff;
+      --text: #333;
+      --accent: #6c63ff;
+      --radius: 12px;
+    }
+    body {
+      font-family: 'Nunito', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      background: #fff;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h2 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    header a {
+      text-decoration: none;
+      font-size: 1rem;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      background: #eee;
+      color: #333;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .tab-buttons {
+      display: none;
+      justify-content: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: #fff;
+    }
+    .tab-buttons button {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 6px;
+      background: #ddd;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .tab-buttons button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .container {
+      display: flex;
+      height: calc(100vh - 80px);
+    }
+    .pane {
+      flex: 1;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+    textarea {
+      width: 100%;
+      height: 100%;
+      resize: none;
+      border-radius: var(--radius);
+      padding: 1rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    .preview-box {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 1rem;
+      box-sizing: border-box;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    @media (max-width: 767px) {
+      .container {
+        flex-direction: column;
+      }
+      .pane {
+        display: none;
+      }
+      .pane.active {
+        display: block;
+        height: calc(100vh - 140px);
+      }
+      .tab-buttons {
+        display: flex;
+      }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <h2>📝 Markdown 預覽工具</h2>
+    <a href="index.html">🧭 回首頁</a>
+  </header>
+
+  <div class="tab-buttons">
+    <button id="tab-edit" class="active">✍️ 編輯</button>
+    <button id="tab-preview">🔍 預覽</button>
+  </div>
+
+  <div class="container">
+    <div class="pane active" id="editor-pane">
+      <textarea id="markdown-input" placeholder="# Hello markdown!\n\n請開始輸入你的內容..."></textarea>
+    </div>
+    <div class="pane" id="preview-pane">
+      <div class="preview-box" id="html-preview"></div>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById("markdown-input");
+    const preview = document.getElementById("html-preview");
+    const tabEdit = document.getElementById("tab-edit");
+    const tabPreview = document.getElementById("tab-preview");
+    const editorPane = document.getElementById("editor-pane");
+    const previewPane = document.getElementById("preview-pane");
+
+    function updatePreview() {
+      const md = input.value;
+      preview.innerHTML = marked.parse(md);
+    }
+
+    input.addEventListener("input", updatePreview);
+    updatePreview();
+
+    tabEdit?.addEventListener("click", () => {
+      tabEdit.classList.add("active");
+      tabPreview.classList.remove("active");
+      editorPane.classList.add("active");
+      previewPane.classList.remove("active");
+    });
+
+    tabPreview?.addEventListener("click", () => {
+      tabEdit.classList.remove("active");
+      tabPreview.classList.add("active");
+      editorPane.classList.remove("active");
+      previewPane.classList.add("active");
+    });
+  </script>
+
+</body>
+</html>

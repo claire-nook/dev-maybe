@@ -1,0 +1,269 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>圖片轉 PDF 工具</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600&display=swap">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8f9fa;
+      --card: #fff;
+      --text: #333;
+      --accent: #2f855a;
+      --radius: 12px;
+    }
+    body {
+      font-family: 'Nunito', sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      background: #fff;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h2 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    header a {
+      text-decoration: none;
+      font-size: 1rem;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      background: #eee;
+      color: #333;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .toolbar {
+      background: var(--card);
+      padding: 16px;
+      border-radius: var(--radius);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    input[type="file"],
+    select {
+      font-size: 1rem;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .preview {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+    }
+    .preview-item {
+      position: relative;
+    }
+    .preview img {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .remove-btn {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: #e53935;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 0 4px rgba(0,0,0,0.2);
+    }
+    label {
+      font-size: 0.95rem;
+    }
+    @media (max-width: 767px) {
+      .wrap { padding: 18px 14px; }
+      input, select, button {
+        font-size: 16px !important;
+        height: 44px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h2>🖼️ 圖片轉 PDF 工具</h2>
+  <a href="index.html">🧭 回首頁</a>
+</header>
+
+<div class="wrap">
+  <div class="toolbar">
+    <input type="file" id="imageInput" multiple accept="image/*">
+    <select id="layoutSelect">
+      <option value="1">每頁 1 張</option>
+      <option value="2">每頁 2 張（上下）</option>
+      <option value="4">每頁 4 張（2x2）</option>
+    </select>
+    <label><input type="checkbox" id="compressToggle" checked> 壓縮圖片</label>
+    <button class="btn" id="btnConvert">轉成 PDF</button>
+  </div>
+  <div class="preview" id="previewContainer"></div>
+</div>
+
+<script>
+  const input = document.getElementById("imageInput");
+  const preview = document.getElementById("previewContainer");
+  const btnConvert = document.getElementById("btnConvert");
+  const layoutSelect = document.getElementById("layoutSelect");
+  const compressToggle = document.getElementById("compressToggle");
+
+  let images = [];
+
+  input.addEventListener("change", (e) => {
+    const files = [...e.target.files];
+    files.forEach(file => {
+      if (!file.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        addImage(event.target.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  function addImage(dataUrl) {
+    images.push(dataUrl);
+    const wrapper = document.createElement("div");
+    wrapper.className = "preview-item";
+    const img = new Image();
+    img.src = dataUrl;
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "remove-btn";
+    removeBtn.textContent = "×";
+    removeBtn.onclick = () => {
+      images = images.filter(i => i !== dataUrl);
+      wrapper.remove();
+    };
+    wrapper.appendChild(removeBtn);
+    wrapper.appendChild(img);
+    preview.appendChild(wrapper);
+  }
+
+  async function compressImage(dataUrl, maxSize = 1280, quality = 0.7) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = dataUrl;
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxSize) {
+            height *= maxSize / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width *= maxSize / height;
+            height = maxSize;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+    });
+  }
+
+  btnConvert.addEventListener("click", async () => {
+    if (!images.length) {
+      alert("請先選擇圖片！");
+      return;
+    }
+    const layout = parseInt(layoutSelect.value, 10);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const positions = {
+      1: [{ x: 10, y: 10, w: 190, h: 277 }],
+      2: [
+        { x: 10, y: 10, w: 190, h: 135 },
+        { x: 10, y: 150, w: 190, h: 135 }
+      ],
+      4: [
+        { x: 10, y: 10, w: 90, h: 135 },
+        { x: 110, y: 10, w: 90, h: 135 },
+        { x: 10, y: 150, w: 90, h: 135 },
+        { x: 110, y: 150, w: 90, h: 135 }
+      ]
+    };
+
+    let i = 0;
+    while (i < images.length) {
+      if (i > 0) pdf.addPage();
+      const slots = positions[layout];
+      for (let j = 0; j < slots.length && i < images.length; j++, i++) {
+        let imgData = images[i];
+        if (compressToggle.checked) {
+          imgData = await compressImage(imgData);
+        }
+
+        const img = new Image();
+        img.src = imgData;
+        await new Promise((resolve) => {
+          img.onload = () => {
+            const aspect = img.width / img.height;
+            const { x, y, w, h } = slots[j];
+            let drawW = w, drawH = h;
+            if (w / h > aspect) {
+              drawH = h;
+              drawW = h * aspect;
+            } else {
+              drawW = w;
+              drawH = w / aspect;
+            }
+            const offsetX = x + (w - drawW) / 2;
+            const offsetY = y + (h - drawH) / 2;
+            pdf.addImage(imgData, 'JPEG', offsetX, offsetY, drawW, drawH);
+            resolve();
+          };
+        });
+      }
+    }
+
+    pdf.save("converted.pdf");
+  });
+</script>
+
+</body>
+</html>
