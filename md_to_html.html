@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Markdown 預覽工具</title>
+  <title>Markdown to HTML 預覽工具</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600&display=swap">
   <style>
     :root {
@@ -36,7 +36,20 @@
       margin: 0;
       font-size: 1.5rem;
     }
-    header a {
+    
+.header-right {
+  display: flex;
+  gap: 0.5rem;
+}
+.pc-only { display: inline-block; }
+.mobile-only { display: none; }
+
+@media (max-width: 767px) {
+  .pc-only { display: none; }
+  .mobile-only { display: inline-block; }
+}
+
+header a {
       text-decoration: none;
       font-size: 1rem;
       padding: 0.5rem 1rem;
@@ -115,13 +128,17 @@
 <body>
 
   <header>
-    <h2>📝 Markdown 預覽工具</h2>
-    <a href="index.html">🧭 回首頁</a>
+    <h2>📝 MD 2 Html</h2>
+    <div class="header-right"><a href="index.html" class="btn">🧭 回首頁</a> <a href="javascript:void(0)" id="downloadBtnPC" class="btn pc-only">💾 下載 HTML</a></div>
+  
+    
+
   </header>
 
   <div class="tab-buttons">
     <button id="tab-edit" class="active">✍️ 編輯</button>
     <button id="tab-preview">🔍 預覽</button>
+    <button id="downloadBtnMobile" class="btn mobile-only">💾 下載 HTML</button>
   </div>
 
   <div class="container">
@@ -162,7 +179,34 @@
       editorPane.classList.remove("active");
       previewPane.classList.add("active");
     });
-  </script>
+  
+    
+function triggerDownload() {
+  const md = document.getElementById("markdown-input").value;
+  const htmlContent = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>Markdown 轉換結果</title>
+<style>body{font-family:sans-serif;padding:2rem;line-height:1.6;}</style>
+</head>
+<body>
+${marked.parse(md)}
+</body>
+</html>`;
+  const blob = new Blob([htmlContent], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "markdown.html";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("downloadBtnPC")?.addEventListener("click", triggerDownload);
+document.getElementById("downloadBtnMobile")?.addEventListener("click", triggerDownload);
+
+</script>
 
 </body>
 </html>
